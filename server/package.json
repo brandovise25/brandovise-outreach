@@ -1,0 +1,31 @@
+{
+  "name": "@outreach/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "create-user": "tsx src/cli/create-user.ts",
+    "migrate": "tsx src/cli/migrate.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.3.1",
+    "@fastify/rate-limit": "^11.2.1",
+    "@fastify/static": "^10.1.5",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@outreach/shared": "*",
+    "argon2": "^0.45.1",
+    "dbmate": "^2.36.0",
+    "fastify": "^5.12.5",
+    "jose": "^6.2.12",
+    "pg": "^8.23.1",
+    "tsx": "^4.23.15",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1"
+  },
+  "license": "PolyForm-Noncommercial-1.0.0"
+}

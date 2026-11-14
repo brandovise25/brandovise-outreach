@@ -1,0 +1,7 @@
+docs/reference/
+fixtures/
+**/.output/
+**/.wxt/
+package-lock.json
+docs/
+CLAUDE.md

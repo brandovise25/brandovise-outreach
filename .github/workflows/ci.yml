@@ -1,0 +1,54 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: outreach_test
+        ports: ['54329:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_OWNER_URL: postgres://postgres:postgres@localhost:54329/outreach_test?sslmode=disable
+      TEST_API_URL: postgres://api_rpc:api_rpc_test@localhost:54329/outreach_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Apply migrations and seeds
+        run: |
+          MIGRATION_DATABASE_URL="$TEST_OWNER_URL" API_RPC_PASSWORD=api_rpc_test npx tsx server/src/cli/migrate.ts
+          for f in db/tests/*.sql; do psql "$TEST_OWNER_URL" -q -v ON_ERROR_STOP=1 -f "$f"; done
+      - run: npm run lint
+      - run: npx prettier --check .
+      - run: npm run typecheck
+      - run: npm run build -w web
+      - run: npm test
+      - run: npm run zip -w extension
+      - uses: actions/upload-artifact@v4
+        with:
+          name: brandovise-outreach-extension
+          path: extension/.output/*.zip
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

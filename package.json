@@ -1,0 +1,39 @@
+{
+  "name": "linkedin-outreach-extension",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/shared",
+    "server",
+    "extension",
+    "web"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "build": "npm run build --workspaces --if-present",
+    "secrets:scan": "gitleaks git --redact --no-banner .",
+    "prepare": "simple-git-hooks"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "gitleaks git --staged --redact --no-banner && npm run lint"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "@playwright/test": "^1.64.0",
+    "@types/node": "^22.0.0",
+    "eslint": "^10.12.0",
+    "prettier": "^3.9.9",
+    "simple-git-hooks": "^2.14.0",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.1",
+    "vitest": "^5.0.3"
+  },
+  "license": "PolyForm-Noncommercial-1.0.0"
+}

@@ -1,0 +1,20 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Example env files hold placeholders only"
+paths = ['''\.env\.example$''']
+
+# Easypanel deploy links carry a secret token: anyone holding one can trigger a deploy (13.11.2026).
+[[rules]]
+id = "easypanel-deploy-hook"
+description = "Easypanel deploy webhook URL with its secret token"
+regex = '''/api/(compose/)?deploy/[0-9a-f]{32,}'''
+keywords = ["/deploy/"]
+
+# The robot's remote API token header, if a script ever hard-codes it.
+[[rules]]
+id = "outreach-api-token-header"
+description = "x-api-token header with a literal value"
+regex = '''(?i)x-api-token['"]?\s*[:=]\s*['"][0-9a-f]{24,}['"]'''
+keywords = ["x-api-token"]

@@ -1,0 +1,72 @@
+# Production stack for Easypanel ("Compose" service): Postgres 17 + API/web app + nightly backup.
+# Easypanel: Source = this GitHub repo, compose file path = docker-compose.prod.yml (repo root, so that
+# Compose reads the .env Easypanel writes there from the Environment tab; see .env.prod.example).
+# Domain: in Easypanel's Domains tab, route outreach.<domain> to service "api", port 3000.
+# Postgres is NOT reachable from outside (no published ports).
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: outreach_owner
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: outreach
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U outreach_owner -d outreach']
+      interval: 5s
+      retries: 30
+
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose: ['3000']
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      RUN_MIGRATIONS: 'true'
+      MIGRATION_DATABASE_URL: postgres://outreach_owner:${POSTGRES_PASSWORD}@postgres:5432/outreach?sslmode=disable
+      API_RPC_PASSWORD: ${API_RPC_PASSWORD:?set API_RPC_PASSWORD}
+      DATABASE_URL: postgres://api_rpc:${API_RPC_PASSWORD}@postgres:5432/outreach
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      ALLOWED_ORIGINS: chrome-extension://jldmmlhhnmoomahfmeobddgobklcjdof
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      API_TOKEN: ${API_TOKEN:-}
+      # Developer page captures (LinkedIn pages for tests). Private volume, never in git; copy them to
+      # the Mac with scripts/pull-captures.sh.
+      DEV_CAPTURE_DIR: /captures
+    volumes:
+      - captures:/captures
+
+  # Nightly pg_dump at 03:15 Berlin; keeps 14 daily, 8 weekly, 6 monthly dumps in the "backups" volume.
+  # Copy them off the server now and then (or point Easypanel's volume backup at it).
+  backup:
+    image: prodrigestivill/postgres-backup-local:17
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: outreach
+      POSTGRES_USER: outreach_owner
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: Europe/Berlin
+      SCHEDULE: '15 3 * * *'
+      BACKUP_KEEP_DAYS: 14
+      BACKUP_KEEP_WEEKS: 8
+      BACKUP_KEEP_MONTHS: 6
+    volumes:
+      - backups:/backups
+
+volumes:
+  pgdata:
+  backups:
+  captures:

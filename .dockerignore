@@ -1,0 +1,12 @@
+node_modules
+**/node_modules
+extension/.output
+extension/.wxt
+.git
+fixtures
+eval
+docs
+*.dump
+.env
+.env.*
+web/dist

@@ -1,0 +1,17 @@
+node_modules/
+dist/
+web/dist/
+.output/
+.wxt/
+.env
+.env.*
+!.env.example
+*.dump
+*.sql.gz
+fixtures/raw/
+eval/reports/*.raw.json
+.DS_Store
+coverage/
+test-results/
+playwright-report/
+backups/

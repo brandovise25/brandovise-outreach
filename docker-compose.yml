@@ -1,0 +1,47 @@
+# Local full stack: Postgres 17 + API on http://localhost:3300.
+#   docker compose up --build
+# Easypanel on the VPS builds the same server/Dockerfile (see docs/DEPLOY.md).
+name: outreach-local
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: outreach_owner
+      POSTGRES_PASSWORD: local_owner_pw
+      POSTGRES_DB: outreach
+    ports: ['127.0.0.1:54330:5432'] # only for local tools (psql, create-user)
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U outreach_owner -d outreach']
+      interval: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports: ['127.0.0.1:3300:3000']
+    volumes:
+      - ./fixtures/raw:/captures
+      - ./fixtures/redacted:/captures-redacted
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      RUN_MIGRATIONS: 'true'
+      MIGRATION_DATABASE_URL: postgres://outreach_owner:local_owner_pw@postgres:5432/outreach?sslmode=disable
+      API_RPC_PASSWORD: local_api_pw
+      DATABASE_URL: postgres://api_rpc:local_api_pw@postgres:5432/outreach
+      JWT_SECRET: local-only-jwt-secret-not-for-production-use
+      ALLOWED_ORIGINS: chrome-extension://jldmmlhhnmoomahfmeobddgobklcjdof
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      API_TOKEN: ${API_TOKEN:-} # remote API (scripts/outreach.sh); unset = disabled
+      DEV_CAPTURE_DIR: /captures # local only: side-panel page captures land in fixtures/
+      DEV_CAPTURE_REDACTED_DIR: /captures-redacted
+
+volumes:
+  pgdata:
