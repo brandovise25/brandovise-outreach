@@ -4,10 +4,11 @@ A self-hosted LinkedIn outreach assistant: a Chrome extension that does the brow
 that holds the data and the rules, a web app to review everything, and an MCP server so Claude can
 run it with you. Built by Brandovise GmbH for its own outreach to small professional offices.
 
-**License: source-available, free for non-commercial use** ([PolyForm Noncommercial 1.0.0](LICENSE)).
-You may read, run, change and share the code for any non-commercial purpose. Commercial use, including
-selling it, offering it as a service or using it in paid client work, needs written permission from
-Brandovise GmbH. Because of this restriction it is not "open source" in the OSI sense.
+**License: source-available, use it but do not sell it** ([Apache 2.0 with the Commons Clause](LICENSE)).
+You may use, change and share the code, also inside your company and for your own commercial outreach.
+You may not sell it: no charging others for the software itself, or for hosting, consulting or support
+whose value comes entirely or substantially from it, without written permission from Brandovise GmbH.
+Because of this condition it is not "open source" in the OSI sense.
 
 ## What it does
 
