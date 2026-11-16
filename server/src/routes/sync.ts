@@ -50,6 +50,7 @@ export const syncRoutes: FastifyPluginAsync<{ deps: AppDeps }> = async (app, { d
           })),
         ),
         JSON.stringify(payload.sent.items.map((s) => s.profileUrl)),
+        JSON.stringify(payload.received.map((r) => r.profileUrl)),
       ],
     );
     return {

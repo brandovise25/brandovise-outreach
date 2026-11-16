@@ -45,6 +45,7 @@ describe('sync round', () => {
           },
         ],
         sent: { total: 290, items: [] },
+        received: [],
         inbox: [
           {
             name: 'Ben Reply',

@@ -266,6 +266,75 @@ export function Today({ refreshKey, onGo }: { refreshKey: number; onGo: (tab: st
   );
 }
 
+// ---------- Who started the contact (16.11.2026) ----------
+
+// robot: invited by the app; requested: they sent Jibran a request (seen on Invitations received);
+// invited: Jibran invited them by hand (seen on Sent invitations); unknown: seen on neither page.
+export type Origin = 'robot' | 'requested' | 'invited' | 'unknown';
+const ORIGIN: Record<Origin, { label: string; cls: string; title: string }> = {
+  robot: { label: 'we invited', cls: '', title: 'Invited by the robot' },
+  requested: {
+    label: 'they requested',
+    cls: 'ok',
+    title: 'They sent you a connection request (seen on Invitations received)',
+  },
+  invited: {
+    label: 'you invited by hand',
+    cls: '',
+    title: 'You invited them on LinkedIn yourself (seen on Sent invitations)',
+  },
+  unknown: {
+    label: 'not sure who asked',
+    cls: 'warn',
+    title: 'Connected, but the robot saw them on neither the Received nor the Sent page',
+  },
+};
+
+export function OriginBadge({ origin }: { origin?: Origin | null }) {
+  if (!origin) return null;
+  const o = ORIGIN[origin];
+  return (
+    <span className={`badge ${o.cls}`} title={o.title}>
+      {o.label}
+    </span>
+  );
+}
+
+// "Who: All / we invited / they requested / …" with counts; hidden when everyone came the same way.
+function OriginFilter({
+  items,
+  value,
+  onChange,
+}: {
+  items: { origin?: Origin | null }[];
+  value: Origin | null;
+  onChange: (o: Origin | null) => void;
+}) {
+  const counts = new Map<Origin, number>();
+  for (const i of items) if (i.origin) counts.set(i.origin, (counts.get(i.origin) ?? 0) + 1);
+  if (counts.size < 2 && !value) return null;
+  return (
+    <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
+      <span className="muted small">Who:</span>
+      <button className={`btn ${value === null ? 'primary' : ''}`} onClick={() => onChange(null)}>
+        All {items.length}
+      </button>
+      {(Object.keys(ORIGIN) as Origin[])
+        .filter((o) => counts.has(o))
+        .map((o) => (
+          <button
+            key={o}
+            className={`btn ${value === o ? 'primary' : ''}`}
+            title={ORIGIN[o].title}
+            onClick={() => onChange(o)}
+          >
+            {ORIGIN[o].label} {counts.get(o)}
+          </button>
+        ))}
+    </div>
+  );
+}
+
 // ---------- Approve ----------
 
 interface QueueRow {
@@ -284,6 +353,7 @@ interface QueueRow {
   reply_reason?: string | null;
   fit: Fit | null;
   trigger: Trigger | null;
+  origin?: Origin | null;
 }
 
 const ACTION_LABEL: Record<string, string> = {
@@ -342,6 +412,7 @@ function QueueCard({ row, onDone }: { row: QueueRow; onDone: (msg: string) => vo
         {[row.headline, row.company].filter(Boolean).join(' · ')}
       </div>
       <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
+        <OriginBadge origin={row.origin} />
         <FitBadge fit={row.fit} />
         {isInvite && <TriggerChip trigger={row.trigger} />}
         {row.status === 'approved' && <span className="badge ok">approved</span>}
@@ -500,6 +571,7 @@ function SendApproved({ refreshKey, toast }: { refreshKey: number; toast: (m: st
 export function Approve({ refreshKey, toast }: { refreshKey: number; toast: (m: string) => void }) {
   const { data, error, reload } = useData<QueueRow[]>('/panel/queue', refreshKey);
   const [group, setGroup] = useState<string | null>(null);
+  const [who, setWho] = useState<Origin | null>(null);
   const [showApproved, setShowApproved] = useState(false);
   // Due invites and follow-ups are prepared on the server (personal note, checks); then the list is reloaded.
   useEffect(() => {
@@ -528,7 +600,8 @@ export function Approve({ refreshKey, toast }: { refreshKey: number; toast: (m: 
     GROUPS.find((g) => g.id === group) ??
     GROUPS.find((g) => count(g, 'proposed') > 0) ??
     GROUPS[0]!;
-  const rows = data.filter((r) => active.actions.includes(r.action));
+  const groupRows = data.filter((r) => active.actions.includes(r.action));
+  const rows = groupRows.filter((r) => !who || r.origin === who);
   const proposed = rows.filter((r) => r.status === 'proposed');
   const approved = rows.filter((r) => r.status === 'approved');
 
@@ -555,6 +628,7 @@ export function Approve({ refreshKey, toast }: { refreshKey: number; toast: (m: 
           })}
         </div>
         <div className="muted small">{active.explain}</div>
+        <OriginFilter items={groupRows} value={who} onChange={setWho} />
       </div>
 
       {active.actions.includes('withdraw') && proposed.length > 1 && (
@@ -626,6 +700,7 @@ interface Lead {
   company_domain?: string | null;
   signals?: Signal[];
   inbound?: boolean; // connected with Jibran (he accepted their request): approving sends no invite
+  origin?: Origin | null;
 }
 
 function FindProspects({ onDone }: { onDone: (m: string) => void }) {
@@ -731,6 +806,7 @@ export function Leads({ refreshKey, toast }: { refreshKey: number; toast: (m: st
   const [err, setErr] = useState<Record<number, string>>({});
   const [picked, setPicked] = useState<Record<number, string>>({});
   const [cohort, setCohort] = useState<string[]>([]);
+  const [who, setWho] = useState<Origin | null>(null);
   if (!data) return <Loading error={error} />;
   if (!data.length)
     return (
@@ -771,8 +847,10 @@ export function Leads({ refreshKey, toast }: { refreshKey: number; toast: (m: st
       <AddByLink onDone={(m) => (toast(m), reload())} />
       <Companies refreshKey={refreshKey} toast={toast} onLeads={reload} />
       <SignalFilter leads={data} value={cohort} onChange={setCohort} />
+      <OriginFilter items={data} value={who} onChange={setWho} />
       {data
         .filter((l) => hasSignals(l, cohort))
+        .filter((l) => !who || l.origin === who)
         .map((lead) => {
           const chosen = picked[lead.id] ?? lead.campaign_id ?? '';
           const chosenCampaign = campaigns?.find((c) => c.id === chosen);
@@ -794,7 +872,8 @@ export function Leads({ refreshKey, toast }: { refreshKey: number; toast: (m: st
                     className="badge"
                     title="Already connected. Approving with a campaign queues the thank-you message for your approval, no invite."
                   >
-                    new connection
+                    new connection ·{' '}
+                    {lead.origin ? ORIGIN[lead.origin].label : 'not sure who asked'}
                   </span>
                 ) : (
                   <span className="badge warn">staged</span>

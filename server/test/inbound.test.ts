@@ -30,6 +30,7 @@ beforeEach(async () => {
   await owner(async (c) => {
     userId = (await c.query(`select id from outreach.app_users`)).rows[0].id;
     await c.query(`delete from outreach.inbound_connections; delete from outreach.sent_seen;
+      delete from outreach.received_seen;
       delete from outreach.action_queue; delete from outreach.events;
       delete from outreach.candidates; delete from outreach.prospects;
       update outreach.campaigns set status = 'off' where status = 'on';
@@ -52,13 +53,19 @@ afterAll(() =>
   ),
 );
 
-const sync = (connections: unknown[], sent: unknown[] = []) =>
+const sync = (connections: unknown[], sent: unknown[] = [], received: unknown[] = []) =>
   app.inject({
     method: 'POST',
     url: '/ext/sync',
     headers: { authorization: `Bearer ${token}` },
-    payload: { jobId: null, connections, sent: { total: 1, items: sent }, inbox: [] },
+    payload: { jobId: null, connections, sent: { total: 1, items: sent }, received, inbox: [] },
   });
+const origin = (url: string) =>
+  owner((c) =>
+    c.query(`select origin, asked from outreach.inbound_connections where linkedin_url = $1`, [
+      url,
+    ]),
+  ).then((r) => r.rows[0]);
 const conn = (url: string, name: string, connectedOn = today) => ({
   name,
   profileUrl: url,
@@ -97,7 +104,10 @@ describe('incoming connections', () => {
   });
 
   it('a fit gets the thank-you for the request, waiting for approval, then the follow-ups', async () => {
+    // seen on Invitations received first: they asked
+    await sync([], [], [{ name: 'Neue Person', profileUrl: NEW }]);
     await sync([conn(NEW, 'Neue Person')]);
+    expect(await origin(NEW)).toEqual({ origin: 'requested', asked: true });
     const res = await assessInbound(
       deps,
       userId,
@@ -138,6 +148,68 @@ describe('incoming connections', () => {
     await assessInbound(deps, userId, { url: MINE, profile: profile('Selbst') }, fit('yes'));
     const [q] = await queue(MINE);
     expect(q.message_text).toMatch(/danke für die Vernetzung\./);
+    expect(await origin(MINE)).toEqual({ origin: 'invited', asked: false });
+  });
+
+  it('seen on neither page: not sure who asked, so the neutral thank-you (16.11.2026)', async () => {
+    await sync([conn(NEW, 'Neue Person')]);
+    expect(await origin(NEW)).toEqual({ origin: 'unknown', asked: false });
+    await assessInbound(deps, userId, { url: NEW, profile: profile('Neue Person') }, fit('yes'));
+    const [q] = await queue(NEW);
+    expect(q.message_text).toMatch(/^Guten Tag Neue, danke für die Vernetzung\./);
+  });
+
+  it('Approve and Leads say where each contact came from', async () => {
+    await sync(
+      [],
+      [{ name: 'Selbst', profileUrl: MINE, sentDaysAgo: 2 }],
+      [{ name: 'Neue Person', profileUrl: NEW }],
+    );
+    await sync([conn(NEW, 'Neue Person'), conn(MINE, 'Selbst Eingeladen'), conn(OLD, 'Dritte')]);
+    await assessInbound(deps, userId, { url: NEW, profile: profile('Neue Person') }, fit('yes'));
+    await assessInbound(deps, userId, { url: MINE, profile: profile('Selbst') }, fit('yes'));
+    await assessInbound(deps, userId, { url: OLD, profile: profile('Dritte') }, fit('no'));
+    await owner((c) =>
+      c.query(`insert into outreach.prospects (id, linkedin_url, full_name, stage, campaign_id) values
+          (9701, 'https://www.linkedin.com/in/robot-eingeladen/', 'Robot Eingeladen', 'approved', 'in-camp');
+        update outreach.action_queue set status = 'proposed', due_at = now() where prospect_id = 9701`),
+    );
+    const q = (
+      await app.inject({
+        method: 'GET',
+        url: '/panel/queue',
+        headers: { authorization: `Bearer ${token}` },
+      })
+    ).json() as { full_name: string; origin: string }[];
+    const byName = Object.fromEntries(q.map((r) => [r.full_name, r.origin]));
+    expect(byName).toMatchObject({
+      'Neue Person': 'requested',
+      Selbst: 'invited', // the name comes from the profile that was opened
+      'Robot Eingeladen': 'robot',
+    });
+    const leads = (
+      await app.inject({
+        method: 'GET',
+        url: '/panel/leads',
+        headers: { authorization: `Bearer ${token}` },
+      })
+    ).json() as { full_name: string; origin: string }[];
+    expect(leads.find((l) => l.full_name === 'Dritte')?.origin).toBe('unknown');
+    // a robot invite that is accepted is recorded as 'existing' and stays a robot invite
+    await owner((c) =>
+      c.query(
+        `update outreach.prospects set stage = 'invited', invited_at = now() where id = 9701`,
+      ),
+    );
+    await sync([conn('https://www.linkedin.com/in/robot-eingeladen/', 'Robot Eingeladen')]);
+    const again = (
+      await app.inject({
+        method: 'GET',
+        url: '/panel/queue',
+        headers: { authorization: `Bearer ${token}` },
+      })
+    ).json() as { full_name: string; origin: string }[];
+    expect(again.find((r) => r.full_name === 'Robot Eingeladen')?.origin).toBe('robot');
   });
 
   it('no fit: listed in Leads, and approving it enrolls without an invite', async () => {
@@ -190,5 +262,24 @@ describe('incoming connections', () => {
       c.query(`select body from outreach.docs where key = 'banned_phrases'`),
     ).then((r) => (r.rows[0]?.body ?? '').split('\n').filter(Boolean));
     expect(validateDraft(text.t, rulesForAction('message', banned)).errors).toEqual([]);
+  });
+
+  it('the white-label partner campaign has its own thank-you that passes the message checks', async () => {
+    const r = await owner((c) =>
+      c.query(
+        `select outreach.inbound_text('white-label-partner', null, 'Anna', true) as asked,
+                outreach.inbound_text('white-label-partner', null, 'Anna', false) as other,
+                outreach.ext_target_group('white-label-partner') as target,
+                (select status from outreach.campaigns where id = 'white-label-partner') as status`,
+      ),
+    ).then((x) => x.rows[0]);
+    expect(r.status).not.toBeNull(); // created 'on'; this test file switches campaigns off first
+    expect(r.target).toMatch(/White-Label-Partner/);
+    expect(r.asked).toMatch(
+      /^Guten Tag Anna, danke für Ihre Vernetzungsanfrage\.\n\nWie ich sehe, sind wir im selben Feld/,
+    );
+    expect(r.other).toMatch(/^Guten Tag Anna, danke für die Vernetzung\./);
+    for (const t of [r.asked, r.other])
+      expect(validateDraft(t, rulesForAction('message', [])).errors).toEqual([]);
   });
 });

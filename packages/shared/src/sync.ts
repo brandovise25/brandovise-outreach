@@ -45,6 +45,15 @@ export const SyncPayload = z.object({
       300,
     ),
   }),
+  // Connection requests waiting for Jibran (Invitations received, 16.11.2026): seen here means the
+  // person asked. Optional, so an older extension that does not read the page still syncs.
+  received: firstN(
+    z.object({
+      name: cut(200),
+      profileUrl: cut(400),
+    }),
+    200,
+  ).default([]),
   inbox: firstN(
     z.object({
       name: cut(200),
@@ -141,7 +150,11 @@ export function inboxDate(time: string | null, now = new Date()): Date | null {
   return !year && d > now ? new Date(y - 1, month, date) : d;
 }
 
-export function matchSync(targets: SyncTarget[], p: SyncPayload, now = new Date()) {
+export function matchSync(
+  targets: SyncTarget[],
+  p: Omit<SyncPayload, 'received'>,
+  now = new Date(),
+) {
   const connected = new Map(p.connections.map((c) => [slugOf(c.profileUrl), c] as const));
   const accepted = targets
     .filter((t) => t.stage === 'invited' && connected.has(slugOf(t.url)))
