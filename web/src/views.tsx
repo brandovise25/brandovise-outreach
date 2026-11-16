@@ -625,6 +625,7 @@ interface Lead {
   reason: string | null;
   company_domain?: string | null;
   signals?: Signal[];
+  inbound?: boolean; // connected with Jibran (he accepted their request): approving sends no invite
 }
 
 function FindProspects({ onDone }: { onDone: (m: string) => void }) {
@@ -788,6 +789,13 @@ export function Leads({ refreshKey, toast }: { refreshKey: number; toast: (m: st
                 </span>
                 {lead.verdict === 'approved' ? (
                   <span className="badge ok">auto-added</span>
+                ) : lead.inbound ? (
+                  <span
+                    className="badge"
+                    title="Already connected. Approving with a campaign queues the thank-you message for your approval, no invite."
+                  >
+                    new connection
+                  </span>
                 ) : (
                   <span className="badge warn">staged</span>
                 )}

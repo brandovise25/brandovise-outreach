@@ -35,8 +35,27 @@ export const syncRoutes: FastifyPluginAsync<{ deps: AppDeps }> = async (app, { d
     );
     // New replies are sorted and answers drafted in the background (for approval, never sent).
     if (applied.replied > 0) kickReplies(deps, userId);
+    // New connections the robot did not invite: recorded; up to 3 come back for a fit check.
+    const inbound = await callJson<{ added: number; to_check: { url: string; name: string }[] }>(
+      deps.db,
+      'ext_inbound_record',
+      [
+        userId,
+        JSON.stringify(
+          payload.connections.map((c) => ({
+            url: c.profileUrl,
+            name: c.name,
+            headline: c.headline ?? null,
+            connectedOn: c.connectedOn,
+          })),
+        ),
+        JSON.stringify(payload.sent.items.map((s) => s.profileUrl)),
+      ],
+    );
     return {
       ...applied,
+      inboundAdded: inbound.added,
+      inboundToCheck: inbound.to_check,
       acceptedNames: m.accepted.map((a) => a.name),
       repliedNames: m.replied.map((r) => r.name),
       unsure: m.unsure,

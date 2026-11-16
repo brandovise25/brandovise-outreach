@@ -24,6 +24,7 @@ export const SyncPayload = z.object({
       name: cut(200),
       profileUrl: cut(400),
       connectedOn: cutOrNull(80),
+      headline: cutOrNull(400).optional(),
     }),
     200,
   ),

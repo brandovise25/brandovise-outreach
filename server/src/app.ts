@@ -21,6 +21,7 @@ import { settingsRoutes } from './routes/settings.ts';
 import { textsRoutes } from './routes/texts.ts';
 import { sendPreviewRoutes, sendRoutes, syncRoutes } from './routes/sync.ts';
 import { prospectRoutes } from './routes/prospect.ts';
+import { inboundRoutes } from './routes/inbound.ts';
 import {
   profileCheckRoutes,
   voiceExtRoutes,
@@ -103,6 +104,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(syncRoutes, { deps, prefix: '/ext' });
   await app.register(sendRoutes, { deps, prefix: '/ext' });
   await app.register(prospectRoutes, { deps, prefix: '/ext' });
+  await app.register(inboundRoutes, { deps, prefix: '/ext' });
   await app.register(sendPreviewRoutes, { deps, prefix: '/panel' });
   await app.register(companyRoutes, { deps, prefix: '/panel' });
   await app.register(replyRoutes, { deps, prefix: '/panel' });

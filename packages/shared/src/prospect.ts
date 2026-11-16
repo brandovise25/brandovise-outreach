@@ -85,3 +85,11 @@ export const AssessInput = z.object({
   }),
 });
 export type AssessInput = z.infer<typeof AssessInput>;
+
+// A new connection the robot did not invite (Jibran accepted their request): the opened profile, for
+// the fit check against every active campaign.
+export const InboundAssessInput = z.object({
+  url: z.string().max(400),
+  profile: AssessInput.shape.profile.omit({ canConnect: true, pending: true, connected: true }),
+});
+export type InboundAssessInput = z.infer<typeof InboundAssessInput>;
