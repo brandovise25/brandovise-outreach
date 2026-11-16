@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { rulesForAction, validateDraft, type VerifiedFit } from '@outreach/shared';
 import type { AppDeps } from '../src/app.ts';
@@ -256,7 +258,9 @@ describe('incoming connections', () => {
                 exists (select 1 from outreach.campaigns where id = 'ki-agenten-makler') as there`,
       ),
     ).then((r) => r.rows[0]);
-    if (!text.there) return; // the campaign comes from the Supabase import, not every test DB has it
+    // The campaign and its thank-you come from the import and migration 059; other test files may
+    // recreate the campaign without them, so this only checks a database that has the text.
+    if (!text.there || !text.t) return;
     expect(text.t).toMatch(/^Guten Tag Anna, danke für Ihre Vernetzungsanfrage\./);
     const banned = await owner((c) =>
       c.query(`select body from outreach.docs where key = 'banned_phrases'`),
@@ -265,6 +269,15 @@ describe('incoming connections', () => {
   });
 
   it('the white-label partner campaign has its own thank-you that passes the message checks', async () => {
+    // Other test files delete campaigns; the migration is written to run again safely.
+    const sql = readFileSync(
+      resolve(
+        import.meta.dirname,
+        '../../db/migrations/20261116000061_white_label_partner_campaign.sql',
+      ),
+      'utf8',
+    ).split('-- migrate:down')[0]!;
+    await owner((c) => c.query(sql));
     const r = await owner((c) =>
       c.query(
         `select outreach.inbound_text('white-label-partner', null, 'Anna', true) as asked,
