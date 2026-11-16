@@ -8,7 +8,12 @@ import { expandSeeMore } from '../lib/adapters/expand.ts';
 import { scrollStep } from '../lib/adapters/scroller.ts';
 import { readExperienceDetails, readProfileTop } from '../lib/adapters/profile.ts';
 import { pageOwner, readOwnComments } from '../lib/adapters/own-comments.ts';
-import { readConnections, readInbox, readSentInvitations } from '../lib/adapters/sync.ts';
+import {
+  readConnections,
+  readInbox,
+  readReceivedInvitations,
+  readSentInvitations,
+} from '../lib/adapters/sync.ts';
 import { readSearchResults } from '../lib/adapters/search.ts';
 import { loadMoreComments, readPostComments } from '../lib/adapters/post-comments.ts';
 import {
@@ -78,6 +83,8 @@ export default defineContentScript({
           sendResponse({ ok: true, ...readConnections(document) });
         } else if (m?.type === 'readSent') {
           sendResponse({ ok: true, ...readSentInvitations(document) });
+        } else if (m?.type === 'readReceived') {
+          sendResponse({ ok: true, ...readReceivedInvitations(document) });
         } else if (m?.type === 'readInbox') {
           sendResponse({ ok: true, items: readInbox(document) });
         } else if (m?.type === 'readProfile') {

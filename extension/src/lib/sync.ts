@@ -1,7 +1,7 @@
 import type { ApiClient } from '@outreach/shared';
 import type { JobRun } from './job-run.ts';
 import { withRobotTab, type RobotTab } from './robot-tab.ts';
-import type { Connection, InboxItem, SentInvitation } from './adapters/sync.ts';
+import type { Connection, InboxItem, ReceivedInvitation, SentInvitation } from './adapters/sync.ts';
 import type { ExperienceItem, ProfileTop } from './adapters/profile.ts';
 
 // Sync round (read-only): the robot tab opens recent connections, sent invitations and the inbox list,
@@ -11,6 +11,7 @@ import type { ExperienceItem, ProfileTop } from './adapters/profile.ts';
 const PAGES = {
   connections: 'https://www.linkedin.com/mynetwork/invite-connect/connections/',
   sent: 'https://www.linkedin.com/mynetwork/invitation-manager/sent/',
+  received: 'https://www.linkedin.com/mynetwork/invitation-manager/received/',
   inbox: 'https://www.linkedin.com/messaging/',
 };
 
@@ -28,7 +29,7 @@ export async function runSyncRound(
   return withRobotTab(run, PAGES.connections, async (tab) => {
     await run.log('Reading your recent connections', {
       step: 'connections',
-      progress: { pages: 1, maxPages: 3 },
+      progress: { pages: 1, maxPages: 4 },
     });
     await readThrough(run, tab, 3);
     const con = await tab.send<{ total: number | null; items: Connection[] }>({
@@ -46,6 +47,17 @@ export async function runSyncRound(
       progress: { pages: 2 },
     });
 
+    // Requests waiting for Jibran: who asked (read only; accepting stays his click).
+    await run.wait(20_000, 45_000, 'between pages');
+    await tab.goto(PAGES.received, 'Opening invitations received (nothing is accepted)');
+    await readThrough(run, tab, 2);
+    const received = await tab
+      .send<{ items: ReceivedInvitation[]; other: number }>({ type: 'readReceived' })
+      .catch(() => ({ items: [] as ReceivedInvitation[], other: 0 }));
+    await run.log(
+      `Invitations received: ${received.items.length} connection request(s), ${received.other} other invitation(s)`,
+    );
+
     await run.wait(20_000, 45_000, 'between pages');
     await tab.goto(PAGES.inbox, 'Opening the inbox (threads are not opened)');
     await readThrough(run, tab, 2);
@@ -53,7 +65,7 @@ export async function runSyncRound(
     await run.log(
       `Inbox: ${inbox.items.length} conversations, ${inbox.items.filter((i) => i.unread).length} unread`,
       {
-        progress: { pages: 3 },
+        progress: { pages: 4 },
       },
     );
 
@@ -73,6 +85,7 @@ export async function runSyncRound(
           sentDaysAgo: s.sentDaysAgo,
         })),
       },
+      received: received.items.map((r) => ({ name: r.name, profileUrl: r.profileUrl })),
       inbox: inbox.items.map((i) => ({
         name: i.name,
         snippet: i.snippet,

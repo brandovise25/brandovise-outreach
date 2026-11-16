@@ -152,6 +152,47 @@ export function readSentInvitations(doc: Document): {
   return { total, items };
 }
 
+// Invitations received (16.11.2026): who sent Jibran a connection request that is still waiting for
+// his click. Read only; the robot never accepts or ignores. Each invitation is a list item
+// (componentkey "urn:li:invitation:…") with a "View <name>’s profile" link and Accept/Ignore controls.
+// Event, page, group and newsletter invitations ("invited you to …") are counted but not returned.
+export interface ReceivedInvitation {
+  name: string;
+  profileUrl: string;
+}
+export function readReceivedInvitations(doc: Document): {
+  items: ReceivedInvitation[];
+  other: number;
+} {
+  const items: ReceivedInvitation[] = [];
+  const seen = new Set<string>();
+  let other = 0;
+  const rows = Array.from(
+    doc.querySelectorAll('[role="listitem"][componentkey^="urn:li:invitation:"]'),
+  );
+  for (const row of rows) {
+    const text = readText(row);
+    const hasAccept = !!Array.from(row.querySelectorAll('button, a')).find((b) =>
+      /^(Accept|Annehmen)\b/i.test(b.getAttribute('aria-label') ?? b.textContent?.trim() ?? ''),
+    );
+    const link = row.querySelector('a[href*="/in/"]');
+    const url = profileUrl(link?.getAttribute('href') ?? null);
+    if (!hasAccept || !url || /invited you to|hat Sie zu|lädt Sie|eingeladen/i.test(text)) {
+      other++;
+      continue;
+    }
+    if (seen.has(url)) continue;
+    seen.add(url);
+    const label = link?.getAttribute('aria-label') ?? '';
+    const name =
+      label.match(/^View (.+?)[’']s profile$/i)?.[1] ??
+      label.match(/^Profil von (.+?) anzeigen$/i)?.[1] ??
+      readText(link!).split('\n')[0]!.trim();
+    items.push({ name, profileUrl: url });
+  }
+  return { items, other };
+}
+
 export function readInbox(doc: Document): InboxItem[] {
   const items: InboxItem[] = [];
   for (const li of Array.from(doc.querySelectorAll('li.msg-conversation-listitem'))) {
