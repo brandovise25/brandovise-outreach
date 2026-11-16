@@ -21,7 +21,8 @@
     "prepare": "simple-git-hooks"
   },
   "simple-git-hooks": {
-    "pre-commit": "gitleaks git --staged --redact --no-banner && npm run lint"
+    "pre-commit": "gitleaks git --staged --redact --no-banner && python3 scripts/check-public.py && npm run lint",
+    "commit-msg": "python3 scripts/check-public.py --msg \"$1\""
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",
