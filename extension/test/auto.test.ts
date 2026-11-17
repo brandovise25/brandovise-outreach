@@ -20,6 +20,10 @@ describe('leadsWaiting', () => {
     expect(leadsWaiting({ leads: 25, approve: 20, approved: 3 })).toBe(45);
     expect(leadsWaiting(undefined)).toBe(0);
   });
+  it('does not count suggested withdrawals (17.11.2026)', () => {
+    // 24 leads, 37 drafts of which 36 are withdrawals: 25 wait, so prospecting runs again
+    expect(leadsWaiting({ leads: 24, approve: 37, approve_contacts: 1 })).toBe(25);
+  });
 });
 
 describe('dueProspectSlot', () => {

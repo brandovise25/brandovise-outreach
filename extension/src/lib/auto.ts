@@ -44,11 +44,15 @@ export async function maybeAutoSend(deps: Deps): Promise<void> {
 interface WaitingCounts {
   leads?: number;
   approve?: number;
+  approve_contacts?: number;
   approved?: number;
 }
 // Leads still waiting for Jibran: staged candidates and drafts to approve. Approved queue items do not
-// count: old ones (over 14 days) are never sent and blocked prospecting for days (18.10.2026).
-export const leadsWaiting = (c: WaitingCounts | undefined) => (c?.leads ?? 0) + (c?.approve ?? 0);
+// count: old ones (over 14 days) are never sent and blocked prospecting for days (18.10.2026). Suggested
+// withdrawals do not count either (17.11.2026: 36 of them paused prospecting); approve_contacts is the
+// count without them, approve the older count with them (a server before that change).
+export const leadsWaiting = (c: WaitingCounts | undefined) =>
+  (c?.leads ?? 0) + (c?.approve_contacts ?? c?.approve ?? 0);
 
 // Two prospect rounds per weekday (Jibran, 13.11.2026): one at a random time 08:00-10:00 and one at 14:00-16:00
 // (Berlin). Each slot runs at most once; if Chrome was off, a slot runs as soon as Chrome is on, until 18:00,
