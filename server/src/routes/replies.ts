@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { DEAL_STAGES, rulesForAction, validateDraft } from '@outreach/shared';
 import { requireAuth, type AppDeps } from '../app.ts';
 import { callJson } from '../db.ts';
+import { processFollowUps } from '../follow-ups.ts';
 import { processReplies } from '../replies.ts';
 
 // Replies inbox and deal stages (plan 13.11.2026). Drafts are approved here or in the Approve tab; the
@@ -63,6 +64,30 @@ export const replyRoutes: FastifyPluginAsync<{ deps: AppDeps }> = async (app, { 
       return processReplies(deps, req.auth!.userId, max);
     },
   );
+
+  // Everyone who wrote back, in sections: hot, due, later, answered, closed (Leads -> Replied).
+  app.get('/replies/board', async (req) =>
+    callJson(deps.db, 'ext_reply_board', [req.auth!.userId]),
+  );
+  // Read follow-up dates and draft follow-ups now (also runs every 15 minutes). id: only this person.
+  app.post(
+    '/replies/follow-ups',
+    { config: { rateLimit: { max: 30, timeWindow: '1 hour' } } },
+    async (req) => {
+      const b = z
+        .object({
+          max: z.number().int().min(1).max(20).default(5),
+          id: z.number().int().positive().optional(),
+        })
+        .parse(req.body ?? {});
+      return processFollowUps(deps, req.auth!.userId, { maxDrafts: b.max, onlyId: b.id });
+    },
+  );
+  app.post('/replies/:id/follow-up-on', async (req) => {
+    const { id } = z.object({ id: z.coerce.number().int().positive() }).parse(req.params);
+    const { on } = z.object({ on: z.iso.date().nullable() }).parse(req.body);
+    return callJson(deps.db, 'ext_reply_follow_up_set', [req.auth!.userId, id, on]);
+  });
 
   app.post('/replies/:id', async (req, reply) => {
     const { id } = z.object({ id: z.coerce.number().int().positive() }).parse(req.params);

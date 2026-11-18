@@ -10,6 +10,7 @@ import type { AppDeps } from './app.ts';
 import { callJson } from './db.ts';
 import { runTask } from './ai/run.ts';
 import { prepareClassifyReplies, prepareDraftReply, type ReplyInput } from './ai/tasks.ts';
+import { processFollowUps } from './follow-ups.ts';
 
 // Replies step (Jibran, 13.11.2026). New replies are sorted and, where an answer makes sense, a draft is
 // written and put into the Approve tab as "proposed". Nothing here approves or sends: a reply only goes
@@ -168,7 +169,10 @@ export function kickReplies(deps: AppDeps, userId: string): void {
 export function startRepliesWorker(deps: AppDeps, everyMs = 15 * 60_000): () => void {
   const tick = async () => {
     const userId = await callJson<string | null>(deps.db, 'ext_api_user', []);
-    if (userId) await processReplies(deps, userId);
+    if (userId) {
+      await processReplies(deps, userId);
+      await processFollowUps(deps, userId);
+    }
   };
   const t = setInterval(() => void tick().catch(() => undefined), everyMs);
   t.unref();

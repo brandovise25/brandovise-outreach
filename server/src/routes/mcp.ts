@@ -419,6 +419,25 @@ export function buildMcpServer(deps: AppDeps, userId: string, panel?: PanelCall)
 
   // ---------- everything else the web app can do (14.11.2026) ----------
   // Through the app's own routes (call), so the checks are the same as in the app.
+  tool(
+    'funnel',
+    'Funnel per campaign and in total: invited, accepted, messaged, replied, hot replies (interested, question, objection), meeting, won. days: only people invited in the last N days (omit for everyone).',
+    { days: z.number().int().min(1).max(3650).optional() },
+    async ({ days }) => ok(await call('GET', `/funnel${days ? `?days=${days}` : ''}`)),
+  );
+  tool(
+    'reply_board',
+    'Everyone who replied, in sections: hot, due (said later, date has come), later, answered, closed; with the follow-up date and any draft.',
+    {},
+    async () => ok(await call('GET', '/replies/board')),
+  );
+  tool(
+    'draft_follow_ups',
+    'Read follow-up dates from "later" replies and draft follow-ups for hot and due people (AI, a few cents). Drafts only wait for approval; nothing is sent. id: only this person.',
+    { id: z.number().int().positive().optional(), max: z.number().int().min(1).max(20).default(5) },
+    async ({ id, max }) => ok(await call('POST', '/replies/follow-ups', { id, max })),
+    false,
+  );
   tool('dashboard', 'The numbers on the app start page.', {}, async () =>
     ok(await call('GET', '/dashboard')),
   );

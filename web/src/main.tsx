@@ -7,6 +7,7 @@ import { Activity, Approve, CampaignsTab, Comments, Leads, Today } from './views
 import { JobLog, RobotBar, startJob, waitForJob } from './robot.tsx';
 import { Voice } from './voice.tsx';
 import { SettingsTab } from './settings.tsx';
+import { ReplyBoard } from './replies.tsx';
 
 type Tab =
   | 'today'
@@ -287,7 +288,9 @@ function App() {
         {tab === 'approve' && (
           <Approve refreshKey={refreshKey} toast={(m) => (toast(m), refresh())} />
         )}
-        {tab === 'leads' && <Leads refreshKey={refreshKey} toast={(m) => (toast(m), refresh())} />}
+        {tab === 'leads' && (
+          <LeadsTabs refreshKey={refreshKey} toast={(m) => (toast(m), refresh())} />
+        )}
         {tab === 'comments' && (
           <Comments refreshKey={refreshKey} toast={(m) => (toast(m), refresh())} />
         )}
@@ -337,3 +340,31 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 );
+
+// Leads has two parts (18.11.2026): new leads, and everyone who replied (hot, due, later, ...).
+function LeadsTabs({ refreshKey, toast }: { refreshKey: number; toast: (m: string) => void }) {
+  const [part, setPart] = useState<'leads' | 'replied'>('leads');
+  return (
+    <>
+      <div className="row" style={{ gap: 6 }}>
+        <button
+          className={`btn ${part === 'leads' ? 'primary' : ''}`}
+          onClick={() => setPart('leads')}
+        >
+          New leads
+        </button>
+        <button
+          className={`btn ${part === 'replied' ? 'primary' : ''}`}
+          onClick={() => setPart('replied')}
+        >
+          Replied
+        </button>
+      </div>
+      {part === 'leads' ? (
+        <Leads refreshKey={refreshKey} toast={toast} />
+      ) : (
+        <ReplyBoard refreshKey={refreshKey} toast={toast} />
+      )}
+    </>
+  );
+}

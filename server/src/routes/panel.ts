@@ -161,6 +161,13 @@ export const panelRoutes: FastifyPluginAsync<{ deps: AppDeps }> = async (app, { 
   });
 
   app.get('/dashboard', async (req) => rpc(deps, 'ext_dashboard', [req.auth!.userId]));
+  // Funnel per campaign: invited -> accepted -> messaged -> replied -> hot -> meeting -> won (18.11.2026).
+  app.get('/funnel', async (req) => {
+    const { days } = z
+      .object({ days: z.coerce.number().int().min(1).max(3650).optional() })
+      .parse(req.query);
+    return rpc(deps, 'ext_funnel', [req.auth!.userId, days ?? null]);
+  });
   app.get('/queue', async (req) => rpc(deps, 'ext_list_queue', [req.auth!.userId]));
   // Prepares due invites and follow-ups (see prepare.ts); the Approve tab calls it, then lists the queue.
   app.post(

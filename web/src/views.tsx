@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Funnel } from './funnel.tsx';
 import { CommentLibrary } from './library.tsx';
 import { RepliesInbox } from './replies.tsx';
 import {
@@ -1672,7 +1673,12 @@ export function CampaignsTab({
 }) {
   const [open, setOpen] = useState<string | null>(null);
   if (open) return <CampaignView id={open} onBack={() => setOpen(null)} />;
-  return <Campaigns refreshKey={refreshKey} toast={toast} onOpen={setOpen} />;
+  return (
+    <>
+      <Funnel refreshKey={refreshKey} />
+      <Campaigns refreshKey={refreshKey} toast={toast} onOpen={setOpen} />
+    </>
+  );
 }
 
 // ---------- Activity ----------

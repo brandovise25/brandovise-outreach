@@ -570,6 +570,87 @@ export async function prepareCommentStudyPosts(
   };
 }
 
+// ---------- follow-ups on replies (18.11.2026) ----------
+
+const FollowUpDatesOutput = z.object({
+  items: z.array(
+    z.object({
+      index: z.number().int(),
+      on: z.string(),
+      reason: z.string().transform((s) => s.slice(0, 300)),
+    }),
+  ),
+});
+export interface FollowUpDateInput {
+  replied_at: string | null;
+  snippet: string;
+}
+// The date someone said they want to be contacted again ("ab Mitte November"). "" when none is named.
+export async function prepareFollowUpDates(
+  items: FollowUpDateInput[],
+  ctx: Ctx,
+): Promise<PreparedTask> {
+  const prompt = await loadPrompt(ctx, 'reply_follow_up_date');
+  const text = items
+    .map(
+      (it, i) =>
+        `ITEM ${i}\nREPLY WRITTEN ON: ${it.replied_at ? it.replied_at.slice(0, 10) : 'unknown'}\nREPLY: ${it.snippet.slice(0, 800)}`,
+    )
+    .join('\n\n');
+  const user = renderTemplate(prompt.user_template, {
+    today: berlinDate(ctx.now ?? new Date()),
+    items: fenceUntrusted(text),
+  });
+  return {
+    version: prompt.version,
+    request: toRequest(prompt, 'reply_follow_up_date', user),
+    verify: (o) =>
+      FollowUpDatesOutput.parse(o)
+        .items.filter((x) => x.index >= 0 && x.index < items.length)
+        .map((x) => ({ ...x, on: /^\d{4}-\d{2}-\d{2}$/.test(x.on.trim()) ? x.on.trim() : '' })),
+  };
+}
+
+const FollowUpOutput = z.object({ message: z.string().transform((s) => s.trim().slice(0, 2000)) });
+export interface FollowUpInput extends ReplyInput {
+  replied_at: string | null;
+  follow_up_on: string | null;
+  section: 'hot' | 'due';
+}
+export async function prepareDraftFollowUp(
+  input: FollowUpInput,
+  ctx: Ctx,
+  audience: string,
+): Promise<PreparedTask> {
+  const prompt = await loadPrompt(ctx, 'draft_follow_up');
+  const rules = await callJson<{ body: string }>(ctx.db, 'ext_get_doc', [
+    ctx.userId,
+    'reply_rules',
+  ]);
+  const situation =
+    input.section === 'due'
+      ? `due: they replied on ${input.replied_at?.slice(0, 10) ?? '?'} that later suits them better; the date they named (${input.follow_up_on ?? '?'}) has come.`
+      : `hot: they replied on ${input.replied_at?.slice(0, 10) ?? '?'} with interest or a question and have no answer from Jibran yet.`;
+  const user = renderTemplate(prompt.user_template, {
+    today: berlinDate(ctx.now ?? new Date()),
+    situation,
+    audience,
+    rules: rules.body.trim() || '-',
+    thread: fenceUntrusted(threadText(input)),
+  });
+  const voice = await callJson<{ profile: VoiceProfile } | null>(ctx.db, 'ext_voice_for_drafting', [
+    ctx.userId,
+  ]);
+  const voiceBlock = voice
+    ? `JIBRAN'S VOICE (his approved voice profile; match its tone and rhythm. The rules above still decide form and length):\n${voiceForPrompt(voice.profile)}`
+    : '';
+  return {
+    version: prompt.version,
+    request: toRequest(prompt, 'draft_follow_up', [user, voiceBlock].filter(Boolean).join('\n\n')),
+    verify: (o): string => FollowUpOutput.parse(o).message,
+  };
+}
+
 // ---------- invite_note: the personal part of a connection request ----------
 
 const InviteNotesOutput = z.object({
