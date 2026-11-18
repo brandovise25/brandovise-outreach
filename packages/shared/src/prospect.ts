@@ -25,6 +25,11 @@ export const KeywordSet = z.object({
   campaign: z.string().max(80).nullable(),
   stage_only: z.boolean().optional(),
   enabled: z.boolean().optional(),
+  // LinkedIn location ids (geoUrn) the search is limited to, e.g. the UK (18.11.2026). None: anywhere.
+  geo: z
+    .array(z.string().regex(/^\d{5,12}$/))
+    .max(30)
+    .optional(),
 });
 export type KeywordSet = z.infer<typeof KeywordSet>;
 

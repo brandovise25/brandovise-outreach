@@ -682,8 +682,11 @@ export async function prepareInviteNotes(
   items: InviteNoteInput[],
   ctx: Ctx,
   audience = 'insurance and finance brokers',
+  language: 'de' | 'en' = 'de',
 ): Promise<PreparedTask> {
-  const prompt = await loadPrompt(ctx, 'invite_note');
+  // English campaigns (UK and Europe, 18.11.2026) have their own prompt; same output and checks shape.
+  const task = language === 'en' ? 'invite_note_en' : 'invite_note';
+  const prompt = await loadPrompt(ctx, task);
   const text = items
     .map(
       (it, i) =>
@@ -708,7 +711,7 @@ export async function prepareInviteNotes(
     : '';
   return {
     version: prompt.version,
-    request: toRequest(prompt, 'invite_note', [user, voiceBlock].filter(Boolean).join('\n\n')),
+    request: toRequest(prompt, task, [user, voiceBlock].filter(Boolean).join('\n\n')),
     verify(o): { index: number; note: string }[] {
       const seen = new Set<number>();
       return InviteNotesOutput.parse(o).notes.filter(

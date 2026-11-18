@@ -40,6 +40,7 @@ interface Candidate {
   campaign_id: string | null;
   campaign_name: string | null;
   campaign_description: string | null;
+  campaign_language?: string | null; // 'en' for the English campaigns, else German
   fit: { evidence?: unknown; reason?: unknown } | null;
   signals?: HookSignal[] | null;
   msg_no?: number | null;
@@ -68,6 +69,14 @@ export function firstNameOf(c: Pick<Candidate, 'first_name' | 'full_name'>): str
   const token = c.full_name.split(/\s+/).find((t) => t && !TITLES.test(t));
   return cleanFirstName(token ?? null, [], '');
 }
+
+const isEnglish = (c: Pick<Candidate, 'campaign_language'>) => c.campaign_language === 'en';
+// "Hi Anna," for English campaigns, "Guten Tag Anna," otherwise.
+const greeting = (c: Candidate) => {
+  if (!isEnglish(c)) return salutation(firstNameOf(c));
+  const fn = firstNameOf(c);
+  return fn ? `Hi ${fn},` : 'Hi,';
+};
 
 // Who the campaign writes to: its name and the part of the description before the first " | ".
 const audienceOf = (c: Candidate) =>
@@ -176,7 +185,8 @@ export async function prepareQueue(deps: AppDeps, userId: string): Promise<Prepa
     for (const c of cand.items.filter((x) => x.action === 'message')) {
       let text = c.message_text ?? '';
       let used: Hook | null = null;
-      const hook = Number(c.msg_no) === 1 ? hookOf(c) : null;
+      // The opening is written in German; English campaigns send their own text unchanged.
+      const hook = Number(c.msg_no) === 1 && !isEnglish(c) ? hookOf(c) : null;
       if (hook && text.trim()) {
         try {
           const task = await prepareMessageOpener(
@@ -241,9 +251,15 @@ export async function prepareQueue(deps: AppDeps, userId: string): Promise<Prepa
           inputs,
           { db: deps.db, userId },
           audienceOf(batch[0]!),
+          isEnglish(batch[0]!) ? 'en' : 'de',
         );
         notes = (
-          await runTask<{ index: number; note: string }[]>(deps, userId, 'invite_note', task)
+          await runTask<{ index: number; note: string }[]>(
+            deps,
+            userId,
+            isEnglish(batch[0]!) ? 'invite_note_en' : 'invite_note',
+            task,
+          )
         ).output;
       } catch {
         deferred += batch.length; // budget, network or format problem: try again on the next call
@@ -260,8 +276,8 @@ export async function prepareQueue(deps: AppDeps, userId: string): Promise<Prepa
           });
           continue;
         }
-        const note = fixUmlauts(body.trim());
-        const text = `${salutation(firstNameOf(c))}\n\n${note}`;
+        const note = isEnglish(c) ? body.trim() : fixUmlauts(body.trim());
+        const text = `${greeting(c)}\n\n${note}`;
         // With a website fact the note must mention that fact; otherwise something of the person.
         const hook = hookOf(c);
         const tokens = hook ? [] : distinctiveTokens(c);
@@ -282,7 +298,7 @@ export async function prepareQueue(deps: AppDeps, userId: string): Promise<Prepa
                 ? []
                 : ['does not mention anything specific about the person']),
           ...hookErrors(note, hook, given),
-          ...inviteNoteIssues(note),
+          ...(isEnglish(c) ? [] : inviteNoteIssues(note)), // German phrasing checks
         ];
         applied.push({
           id: c.id,
